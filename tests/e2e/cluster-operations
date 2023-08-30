@@ -106,78 +106,6 @@ function updateCertPathInKubeConfig {
     echo "Info: Updated cert paths in KUBECONFIG..."
 }
 
-function create_vlan_cls {
-	local e2e_env="$1"
-	local prim_zone="$2"
-	local secd_zone="$3"
-        local vlan_created=0
-        if [[ "$e2e_env" == "prod" ]]; then
-            PRIMARY_PRIV_VLAN=$(ibmcloud ks vlan ls --zone $prim_zone | grep -w 'private' | grep -w $PRIV_VLAN_NAME | head -n 1 | awk '{print $1}')
-            if [[ -z "$PRIMARY_PRIV_VLAN" ]]; then
-                echo "Info: Creating private vlan for $prim_zone..."
-                ibmcloud sl vlan create -t private -d $prim_zone -n  $PRIV_VLAN_NAME -f
-                vlan_created=1
-            fi
-            PRIMARY_PUB_VLAN=$(ibmcloud ks vlan ls --zone $prim_zone | grep -w 'public' |  grep -w $PUB_VLAN_NAME | head -n 1 | awk '{print $1}')
-            if [[ -z "$PRIMARY_PUB_VLAN" ]]; then
-                echo "Info: Creating public vlan for $prim_zone..."
-                ibmcloud sl vlan create -t public -d $prim_zone -n $PUB_VLAN_NAME -f
-               vlan_created=1
-            fi
-            SECOND_PRIV_VLAN=$(ibmcloud ks vlan ls --zone $secd_zone | grep -w 'private' | grep -w $PRIV_VLAN_NAME | head -n 1 | awk '{print $1}')
-            if [[ -z "$SECOND_PRIV_VLAN" ]]; then
-                echo "Info: Creating private vlan for $secd_zone..."
-                ibmcloud sl vlan create -t private -d $secd_zone -n $PRIV_VLAN_NAME -f
-                vlan_created=1
-            fi
-            SECOND_PUB_VLAN=$(ibmcloud ks vlan ls --zone $secd_zone | grep -w 'public' | grep -w $PUB_VLAN_NAME | head -n 1 | awk '{print $1}')
-            if [[ -z "$SECOND_PUB_VLAN" ]]; then
-                echo "Info: Creating public vlan for $secd_zone..."
-                ibmcloud sl vlan create -t public -d $secd_zone -n $PUB_VLAN_NAME -f
-                vlan_created=1
-            fi
-            # Wait for 60sec
-            if [[ $vlan_created -eq 1 ]]; then sleep 60; fi
-        fi
-
-        if [[ -z "$PRIMARY_PRIV_VLAN" ]]; then
-            if [[ "$e2e_env" == "prod" ]]; then
-                PRIMARY_PRIV_VLAN=$(ibmcloud ks vlan ls --zone $prim_zone | grep -w 'private' | grep -w $PRIV_VLAN_NAME | head -n 1 | awk '{print $1}')
-            else
-                PRIMARY_PRIV_VLAN=$(ibmcloud ks vlan ls --zone $prim_zone | grep -w 'private' | head -n 1 | awk '{print $1}')
-            fi
-        fi
-        if [[ -z "$PRIMARY_PUB_VLAN" ]]; then
-            if [[ "$e2e_env" == "prod" ]]; then
-                PRIMARY_PUB_VLAN=$(ibmcloud ks vlan ls --zone $prim_zone | grep -w 'public' | grep -w $PUB_VLAN_NAME | head -n 1 | awk '{print $1}')
-            else
-                PRIMARY_PUB_VLAN=$(ibmcloud ks vlan ls --zone $prim_zone | grep -w 'public' | head -n 1 | awk '{print $1}')
-            fi
-        fi
-        if [[ -z "$PRIMARY_PUB_VLAN" || -z "$PRIMARY_PRIV_VLAN" ]]; then
-    	    PRIMARY_PUB_VLAN=""
-            PRIMARY_PRIV_VLAN=""
-        fi
-
-        if [[ -z "$SECOND_PRIV_VLAN" ]]; then
-            if [[ "$e2e_env" == "prod" ]]; then
-                SECOND_PRIV_VLAN=$(ibmcloud ks vlan ls --zone $secd_zone | grep -w 'private' | grep -w $PRIV_VLAN_NAME | head -n 1 | awk '{print $1}')
-            else
-                SECOND_PRIV_VLAN=$(ibmcloud ks vlan ls --zone $secd_zone | grep -w 'private' | head -n 1 | awk '{print $1}')
-            fi
-        fi
-        if [[ -z "$SECOND_PUB_VLAN" ]]; then
-            if [[ "$e2e_env" == "prod" ]]; then
-                SECOND_PUB_VLAN=$(ibmcloud ks vlan ls --zone $secd_zone | grep -w 'public' | grep -w $PUB_VLAN_NAME | head -n 1 | awk '{print $1}')
-            else
-                SECOND_PUB_VLAN=$(ibmcloud ks vlan ls --zone $secd_zone | grep -w 'public' | head -n 1 | awk '{print $1}')
-            fi
-        fi
-        if [[ -z "$SECOND_PUB_VLAN" || -z "$SECOND_PRIV_VLAN" ]]; then
-            SECOND_PRIV_VLAN=""
-            SECOND_PUB_VLAN=""
-        fi
-}
 
 function createVPC {
 	local res_grp_name="$1"
@@ -208,26 +136,6 @@ function createVPC {
 	return $rc
 }
 
-function check_addon_pod_status {
-  set -x 
-  attempts=0
-  pod_name=$1
-  while true; do
-    attempts=$((attempts+1))
-    pod_status=$(kubectl get sts -n kube-system | grep "$pod_name"| awk '{print $2}')
-    if [   "$pod_status" = "1/1" ]; then
-      echo "$pod_name is  running ."
-      break
-    fi
-    if [[ $attempts -gt 30 ]]; then
-      echo "$pod_name  not running well."
-      kubectl get pods -n kube-system| awk "/$pod_name-/"
-      exit 1
-    fi
-    echo "$pod_name state == $pod_status  Sleeping 10 seconds"
-    sleep 30
-  done
-}
 
 function createSubnet {
 	res_grp_name="$1"
@@ -313,52 +221,6 @@ function getSubNetID {
 	return 0
 }
 
-# Create cluster in Classic IaaS
-function cluster_create_cls {
-    if [[ $# -ne 2 ]]; then
-        echo "${FUNCNAME[0]}: Invalid parameters. Provide cluster name and kube version"
-        return 1
-    fi
-    cluster_name="$1"
-    kube_ver="$2"
-    echo "Info: Creating cluster [$cluster_name] [$kube_ver]..."
-    set -x
-    worker_node_count=$WORKER_NODE_COUNT
-    # OpenShift minimum 2 worker nodes are required
-    if [[ "$E2ETEST_MZ" == "true" && "$K8S_PLATFORM" != "openshift" ]]; then
-       worker_node_count=$WORKER_NODE_COUNT_PERZONE
-    fi
-    if [[ -n "$PRIMARY_PUB_VLAN" ]]; then
-        ibmcloud ks cluster create $IC_PROVIDER --name $cluster_name --zone $PRIMARY_ZONE \
-            --private-vlan $PRIMARY_PRIV_VLAN --public-vlan $PRIMARY_PUB_VLAN \
-            --version $kube_ver --flavor $WORKER_NODE_FLAVOR --workers $worker_node_count; rc=$?
-    else
-        ibmcloud ks cluster create $IC_PROVIDER --name $cluster_name --zone $PRIMARY_ZONE \
-            --version $kube_ver --flavor $WORKER_NODE_FLAVOR --workers $worker_node_count; rc=$?
-    fi
-    if [[ $rc -ne 0 ]]; then set +x;  return 1; fi
-
-    if [[ $E2ETEST_MZ == "true" && -n "$SECOND_PRIV_VLAN" ]]; then
-	random_string=${cluster_name%%-*}
-        cluster_worker_pool="e2etest-${random_string}"
-        ibmcloud ks worker-pool create $IC_PROVIDER --name ${cluster_worker_pool} --cluster $cluster_name \
-            --flavor $WORKER_NODE_FLAVOR --size-per-zone $WORKER_NODE_COUNT_PERZONE; rc=$?
-        if [[ $rc -ne 0 ]]; then set +x;  return 1; fi
-
-        if [[ -n "$SECOND_PRIV_VLAN" ]]; then
-            ibmcloud ks zone add $IC_PROVIDER --cluster $cluster_name --worker-pool ${cluster_worker_pool} \
-                --zone $SECOND_ZONE --private-vlan $SECOND_PRIV_VLAN  --public-vlan $SECOND_PUB_VLAN; rc=$?
-	else
-            ibmcloud ks zone add $IC_PROVIDER --cluster $cluster_name --worker-pool ${cluster_worker_pool} \
-                --zone $SECOND_ZONE; rc=$?
-	fi
-        if [[ $rc -ne 0 ]]; then set +x;  return 1; fi
-
-        ibmcloud ks worker-pool rebalance --cluster $cluster_name --worker-pool ${cluster_worker_pool}
-    fi
-    set +x
-    return 0
-}
 
 # Create cluster in VPC IaaS
 function cluster_create_vpc {
@@ -655,7 +517,7 @@ key="$1"
 	;;
 
         -d|--delete)
-        # Delete exiting cluster
+        # Delete existing cluster
         e2e_cluster_name="$2"
         e2e_cluster_delete="true"
         shift
@@ -663,7 +525,7 @@ key="$1"
         ;;
 
         -c|--cluster)
-        # Use exiting cluster
+        # Use existing cluster
         e2e_cluster_name="$2"
         e2e_create_new_cluster="false"
         e2e_cluster_reclaim="retain"
@@ -719,8 +581,8 @@ key="$1"
 	shift
 	;;
 
-	--addon-update)
-	e2e_addon_update="true"
+	--resource-group)
+	e2e_resource_group="vpc-ca-storage"
 	shift
 	;;
 
@@ -745,14 +607,6 @@ key="$1"
     esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
-
-if [[ -z "$IC_API_KEY_PROD" && -z "$IC_API_KEY_STAG"  ]]; then echo -e "Error: E2ETEST_API_KEY not set!!!" >> $E2E_TEST_SETUP; exit 1;  fi
-
-E2ETEST_MZ="$e2e_mz"
-if [[ "$e2e_env" != "prod" && "$e2e_env" != "stage" ]]; then
-	echo -e "Error: Invalid option \"-e $e2e_env\"!!!" >> $E2E_TEST_SETUP
-	exit 1
-fi
 
 if [[ "$e2e_kube_ver" != "default" && "$e2e_kube_ver" != "latest" && "$e2e_kube_ver" != "base" && "$e2e_kube_ver" == "" ]]; then
 	echo -e "Error: Invalid option \"-k $e2e_kube_ver\"!!!" >> $E2E_TEST_SETUP
@@ -779,6 +633,7 @@ if [[ "$e2e_env" = "stage" ]]; then
 else
     E2ETEST_IC_API_EP="https://cloud.ibm.com"
     [[ -z "$E2ETEST_CS_API_EP" ]] && E2ETEST_CS_API_EP="https://containers.cloud.ibm.com"
+    E2ETEST_IC_RES_GRP=$e2e_resource_group
 fi
 
 if [[ ! "$E2ETEST_CS_API_EP" =~ ^https ]]; then
@@ -799,9 +654,8 @@ if [[ -z "$E2ETEST_API_KEY" ]]; then
     else
         ibmcloud login -a $E2ETEST_IC_API_EP --apikey ${IC_API_KEY_PROD} -r $IC_REGION -g $E2ETEST_IC_RES_GRP; rc=$?
     fi
-else
-    ibmcloud login -a $E2ETEST_IC_API_EP --apikey @${E2ETEST_API_KEY} -r $IC_REGION -g $E2ETEST_IC_RES_GRP; rc=$?
 fi
+
 if [[ $rc -ne 0 ]]; then echo -e "Error: IBM Cloud Login failed!!!" >> $E2E_TEST_SETUP; exit 1; fi
 
 ibmcloud regions | grep -w "$e2e_ic_region" > /dev/null; rc=$?
@@ -880,29 +734,7 @@ if [[ "$e2e_create_new_cluster" == "true" ]]; then
         secd_subnet=${!var_secd}
     fi
 
-    if [[ "$IC_PROVIDER" =~ ^classic ]]; then
-        ##### Retrieve Zones for Classic #######
-        if [[ -n "$E2ETEST_CS_ZONE01" && -n "$E2ETEST_CS_ZONE02" && -n "$E2ETEST_CS_ZONE03" ]]; then
-            echo "Info: User provided zones  $E2ETEST_CS_ZONE01 $E2ETEST_CS_ZONE02 $E2ETEST_CS_ZONE03..."
-            ZONE_classic_01="$E2ETEST_CS_ZONE01"
-            ZONE_classic_02="$E2ETEST_CS_ZONE02"
-            ZONE_classic_03="$E2ETEST_CS_ZONE03"
-        else
-            echo "Info: ibmcloud regions --output json..."
-            metro=$(ibmcloud regions --output json | jq '. | map(select(.Name == '\"$IC_REGION\"'))[0].DisplayName')
-            metro=${metro//\"/}
-            echo "Info: ibmcloud ks locations --provider classic | grep -e \"$metro\"..."
-            zones=($(ibmcloud ks locations --provider classic | grep -e "$metro" | awk '{print $1}' | sort))
-            count=${#zones[@]}
-            ZONE_classic_01="${zones[$count - 1]}"
-            ZONE_classic_02="${zones[$count - 2]}"
-            ZONE_classic_03="${zones[$count - 3]}"
-        fi
-        if [[ -z "$ZONE_classic_01" || -z "$ZONE_classic_02" || -z "$ZONE_classic_03" ]]; then
-            echo -e "Error: Undefined zones for classic!!!" >> $E2E_TEST_SETUP
-            exit 1
-        fi
-    fi
+
 
     if [[ -n "$E2ETEST_NODE_FLAVOR" ]]; then
         WORKER_NODE_FLAVOR="$E2ETEST_NODE_FLAVOR"
@@ -911,24 +743,7 @@ if [[ "$e2e_create_new_cluster" == "true" ]]; then
         WORKER_NODE_FLAVOR=${!var_flvr}
     fi
 
-    var_prim="ZONE_${IC_PROVIDER//-/_}_${PRIMARY_ZONE_ID}"
-    var_secd="ZONE_${IC_PROVIDER//-/_}_${SECOND_ZONE_ID}"
-    PRIMARY_ZONE=${!var_prim}
-    SECOND_ZONE=${!var_secd}
 
-    PRIMARY_PUB_VLAN=""
-    PRIMARY_PRIV_VLAN=""
-    SECOND_PUB_VLAN=""
-    SECOND_PRIV_VLAN=""
-
-    if [[ "$IC_PROVIDER" =~ ^classic ]]; then
-        echo "Info: create_vlan_cls $e2e_env $PRIMARY_ZONE $SECOND_ZONE"
-        create_vlan_cls $e2e_env $PRIMARY_ZONE $SECOND_ZONE
-        echo "Info: Primary Vlan: Public: [$PRIMARY_PUB_VLAN] / [$PRIMARY_ZONE]"
-        echo "Info: Primary Vlan: Private: [$PRIMARY_PRIV_VLAN] / $PRIMARY_ZONE]"
-        echo "Info: Second Vlan: Public: [$SECOND_PUB_VLAN] / [$SECOND_ZONE]"
-        echo "Info: Second Vlan: Private: [$SECOND_PRIV_VLAN] / [$SECOND_ZONE]"
-    fi
     echo "Info: K8S Platforn: [$K8S_PLATFORM], Platform version: [$PLATFORM_VERSION]"
     set -x
     ibmcloud ks versions --show-version $K8S_PLATFORM
@@ -1054,17 +869,6 @@ else
 fi
 
 exportKubeConfig $cluster_name; rc=$?
-
-# From Jenkins there is option to mention addon version. 
-# So if value is not "default", disable and enable user specified version
-if [[ $e2e_addon_version != "default"  ]]; then
-        echo "Info: Installing addon $ADDON_VERSION"
-        ibmcloud ks cluster addon disable vpc-block-csi-driver -f --cluster $cluster_name
-        sleep 60
-        ibmcloud ks cluster addon enable vpc-block-csi-driver --cluster $cluster_name --version $e2e_addon_version
-        sleep 30
-	check_addon_pod_status ibm-vpc-block-csi-controller
-fi
 set -x 
 if [[ $rc -ne 0 ]]; then echo -e "Error: Cluster ($cluster_name) export kube config failed!!!" >> $E2E_TEST_SETUP; exit 1; fi
 if [[ -n "$e2e_var_exports" ]]; then
@@ -1075,19 +879,6 @@ if [[ -n "$e2e_var_exports" ]]; then
     fi
 fi
 
-if [[ $addon_update -eq 0 ]]; then
-    echo "Info: Checking CSI Controller POD state..."
-    count=0
-    while [[ $count -lt 10 ]]; do
-        count=$((count+1))
-        controller_pod=$(kubectl get pods -n kube-system | grep 'ibm-vpc-block-csi-controlle' | grep 'Running'); rc=$?
-        if [[ $rc -ne 0 ]]; then
-            sleep 30
-        else
-            break
-        fi
-    done
-fi
 
 updateCertPathInKubeConfig
 
