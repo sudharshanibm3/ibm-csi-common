@@ -487,6 +487,7 @@ e2e_kube_ver="default"
 e2e_mz="false"
 e2e_var_exports=""
 e2e_name_tag=""
+e2e_addon_update="false"
 
 
 cmd_name="$0"
