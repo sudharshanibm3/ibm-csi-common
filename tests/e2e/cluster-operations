@@ -587,6 +587,11 @@ key="$1"
 	shift
 	;;
 
+        --addon-update)	
+	e2e_addon_update="true"	
+	shift	
+	;;
+
         --retain)
         e2e_cluster_reclaim="retain"
         shift
