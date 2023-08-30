@@ -552,7 +552,7 @@ key="$1"
 	shift
 	;;
 
-        --e2e_resource_group)
+        --resource-group)
         e2e_resource_group="$2"
         shift
 	shift
