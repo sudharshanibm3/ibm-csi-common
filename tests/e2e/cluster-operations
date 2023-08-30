@@ -555,13 +555,13 @@ key="$1"
 
         --resourcegroup)
         e2e_resource_group="$2"
-        shift
-	shift
+        shift;
+	shift;
         ;;
 
 	-p|--provider)
 	e2e_ic_provider="$2"
-	shift;
+	shift
 	shift
 	;;
 
