@@ -8,7 +8,7 @@
 # IBM Corp.
 # encoding: utf-8
 
-# E2ETEST_API_KEY=${E2ETEST_API_KEY:-"/Users/nkashyap/.bluemix/stg-stge2etest.key"}
+
 E2E_TEST_SETUP="$EXECPATH/e2e-setup.out"
 
 default_IC_RES_GRP="vpc-e2e-test"
@@ -56,7 +56,7 @@ FLAVOR_vpc_gen2="bx2.4x16"
 FLAVOR_vpc_classic="b2.4x16"
 FLAVOR_classic="b3c.4x16"
 WORKER_NODE_FLAVOR="bx2.4x16"
-WORKER_NODE_COUNT=2
+WORKER_NODE_COUNT=3
 WORKER_NODE_COUNT_PERZONE=1
 
 
