@@ -19,12 +19,11 @@ package testsuites
 import (
 	"context"
 	"fmt"
-	restclientset "k8s.io/client-go/rest"
 	"math/rand"
 	"os/exec"
 	"strings"
 	"time"
-	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
+
 	volumesnapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1"
 	snapshotclientset "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
 	. "github.com/onsi/ginkgo/v2"
@@ -37,9 +36,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
+	restclientset "k8s.io/client-go/rest"
 	"k8s.io/kubernetes/test/e2e/framework"
 	k8sDevDep "k8s.io/kubernetes/test/e2e/framework/deployment"
 	k8sDevPod "k8s.io/kubernetes/test/e2e/framework/pod"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 	k8sDevPV "k8s.io/kubernetes/test/e2e/framework/pv"
 	imageutils "k8s.io/kubernetes/test/utils/image"
 )
@@ -858,7 +859,29 @@ func NewTestPod(c clientset.Interface, ns *v1.Namespace, command string) *TestPo
 
 func (t *TestPod) Create() {
 	var err error
+	user := int64(1000)
+	nonRoot := true
+	previlagedEscalation := false
+	// group := int64(3000)
+	t.pod.Spec.Containers[0].SecurityContext = &v1.SecurityContext{
+		Capabilities: &v1.Capabilities{
+			Drop: []v1.Capability{"ALL"},
+		},
+		SeccompProfile: &v1.SeccompProfile{
+			Type: v1.SeccompProfileTypeRuntimeDefault,
+		},
+		AllowPrivilegeEscalation: &previlagedEscalation,
+		RunAsNonRoot:             &nonRoot,
+		RunAsUser:                &user,
+	}
 
+	t.pod.Spec.SecurityContext = &v1.PodSecurityContext{
+		RunAsNonRoot: &nonRoot,
+		RunAsUser:    &user,
+		SeccompProfile: &v1.SeccompProfile{
+			Type: v1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
 	t.pod, err = t.client.CoreV1().Pods(t.namespace.Name).Create(context.Background(), t.pod, metav1.CreateOptions{})
 	framework.ExpectNoError(err)
 }
